@@ -17,18 +17,26 @@ async def digest_text(request: TextDigestRequest) -> DigestResponse:
     started_at = perf_counter()
     tools_called: List[str] = []
     output_path = None
+    input_length = len(request.text)
+    chunk_count = 1
+    compression_used = False
+    compressed_length = input_length
 
     try:
         summary = summarize_service.summarize_text(request.text)
         tools_called.append("summary")
+        digest_source = str(summary.get("digest_source") or request.text)
+        chunk_count = int(summary.get("chunk_count", 1))
+        compression_used = bool(summary.get("compression_used", False))
+        compressed_length = int(summary.get("compressed_length", len(digest_source)))
 
-        terms = keyword_service.explain_terms(request.text)
+        terms = keyword_service.explain_terms(digest_source)
         tools_called.append("term_explain")
 
-        quiz = quiz_service.generate_quiz(request.text)
+        quiz = quiz_service.generate_quiz(digest_source)
         tools_called.append("quiz")
 
-        mindmap = mindmap_service.generate_mindmap(request.text)
+        mindmap = mindmap_service.generate_mindmap(digest_source)
         tools_called.append("mindmap")
 
         response = DigestResponse(
@@ -47,6 +55,10 @@ async def digest_text(request: TextDigestRequest) -> DigestResponse:
             input_type="text",
             tools_called=tools_called,
             latency_ms=int((perf_counter() - started_at) * 1000),
+            input_length=input_length,
+            chunk_count=chunk_count,
+            compression_used=compression_used,
+            compressed_length=compressed_length,
             error=None,
             output_path=output_path,
         )
@@ -58,6 +70,10 @@ async def digest_text(request: TextDigestRequest) -> DigestResponse:
             input_type="text",
             tools_called=tools_called,
             latency_ms=int((perf_counter() - started_at) * 1000),
+            input_length=input_length,
+            chunk_count=chunk_count,
+            compression_used=compression_used,
+            compressed_length=compressed_length,
             error=str(exc),
             output_path=output_path,
         )

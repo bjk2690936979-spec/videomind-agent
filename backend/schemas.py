@@ -29,6 +29,10 @@ class TraceInfo(BaseModel):
     input_type: str
     tools_called: List[str]
     latency_ms: int
+    input_length: int = 0
+    chunk_count: int = 1
+    compression_used: bool = False
+    compressed_length: int = 0
     error: Optional[str] = None
     output_path: Optional[str] = None
 
