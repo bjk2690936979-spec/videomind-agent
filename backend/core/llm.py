@@ -32,7 +32,7 @@ def _strip_json_fence(content: str) -> str:
 
 
 def _extract_json_content(content: str) -> str:
-    # 兼容模型返回 Markdown 代码块或附带少量解释文字的情况。
+    # 兼容模型返回 Markdown 代码块或少量解释文字的情况。
     content = _strip_json_fence(content)
     try:
         json.loads(content)

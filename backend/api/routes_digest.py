@@ -49,7 +49,7 @@ async def digest_text(request: TextDigestRequest) -> DigestResponse:
         )
         output_path = str(save_output(trace_id, response))
 
-        # trace 记录本次 Agent 执行链路，后续可扩展节点耗时和中间结果。
+        # 记录本次执行链路，后续可以继续扩展节点耗时和中间结果。
         trace = TraceInfo(
             trace_id=trace_id,
             input_type="text",
