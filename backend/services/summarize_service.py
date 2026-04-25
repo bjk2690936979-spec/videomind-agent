@@ -14,7 +14,7 @@ def _as_string_list(value: Any) -> List[str]:
     return []
 
 
-def _build_summary(text: str) -> Dict[str, Any]:
+def summarize_digest_source(text: str) -> Dict[str, Any]:
     skill = load_skill("summary")
     prompt = f"{skill}\n\n学习材料：\n{text}"
 
@@ -22,13 +22,14 @@ def _build_summary(text: str) -> Dict[str, Any]:
     if not isinstance(result, dict):
         result = {}
 
+    # 归一化模型输出，保证接口返回字段稳定。
     return {
         "one_sentence": str(result.get("one_sentence", "")).strip(),
         "key_points": _as_string_list(result.get("key_points")),
     }
 
 
-def _format_compressed_context(compressed_context: Dict[str, Any]) -> str:
+def format_compressed_context(compressed_context: Dict[str, Any]) -> str:
     key_points = "\n".join(f"- {item}" for item in compressed_context.get("key_points", []))
     important_terms = "、".join(compressed_context.get("important_terms", []))
     return (
@@ -44,7 +45,7 @@ def summarize_text(text: str) -> Dict[str, Any]:
     input_length = len(text)
 
     if input_length <= LONG_TEXT_THRESHOLD:
-        summary = _build_summary(text)
+        summary = summarize_digest_source(text)
         summary.update(
             {
                 "digest_source": text,
@@ -56,10 +57,10 @@ def summarize_text(text: str) -> Dict[str, Any]:
         return summary
 
     compressed_context = compress_text(text)
-    digest_source = _format_compressed_context(compressed_context)
-    summary = _build_summary(digest_source)
+    digest_source = format_compressed_context(compressed_context)
+    summary = summarize_digest_source(digest_source)
 
-    # 长文本后续链路都使用压缩上下文，降低模型上下文压力。
+    # 保留旧 service 行为，供非 LangGraph 调用方继续使用。
     summary.update(
         {
             "digest_source": digest_source,

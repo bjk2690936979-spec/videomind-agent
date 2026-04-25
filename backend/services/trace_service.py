@@ -46,6 +46,19 @@ def save_trace(trace: TraceInfo) -> Path:
     return trace_path
 
 
+def save_trace_data(trace_id: str, trace_data: Dict[str, Any]) -> Path:
+    trace_dir = _storage_path("traces")
+    trace_dir.mkdir(parents=True, exist_ok=True)
+    trace_path = trace_dir / f"{trace_id}.json"
+
+    # 允许视频流程在文本 trace 上补充 transcript_source 等元信息。
+    trace_path.write_text(
+        json.dumps(trace_data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return trace_path
+
+
 def load_trace(trace_id: str) -> Optional[Dict[str, Any]]:
     trace_path = _storage_path("traces", f"{trace_id}.json")
     if not trace_path.exists():

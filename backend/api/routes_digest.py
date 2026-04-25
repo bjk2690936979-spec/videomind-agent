@@ -1,11 +1,17 @@
 from time import perf_counter
-from typing import List
 
 from fastapi import APIRouter, HTTPException
 
-from backend.schemas import DigestResponse, TextDigestRequest, TraceInfo
-from backend.services import keyword_service, mindmap_service, quiz_service, summarize_service
-from backend.services.trace_service import create_trace_id, save_output, save_trace
+from backend.graph.workflow import run_text_digest_workflow
+from backend.schemas import (
+    DigestResponse,
+    TextDigestRequest,
+    TraceInfo,
+    VideoDigestRequest,
+    VideoDigestResponse,
+)
+from backend.services import transcript_service
+from backend.services.trace_service import create_trace_id, load_trace, save_trace, save_trace_data
 
 
 router = APIRouter(prefix="/digest", tags=["digest"])
@@ -13,69 +19,95 @@ router = APIRouter(prefix="/digest", tags=["digest"])
 
 @router.post("/text", response_model=DigestResponse)
 async def digest_text(request: TextDigestRequest) -> DigestResponse:
-    trace_id = create_trace_id()
-    started_at = perf_counter()
-    tools_called: List[str] = []
-    output_path = None
-    input_length = len(request.text)
-    chunk_count = 1
-    compression_used = False
-    compressed_length = input_length
-
     try:
-        summary = summarize_service.summarize_text(request.text)
-        tools_called.append("summary")
-        digest_source = str(summary.get("digest_source") or request.text)
-        chunk_count = int(summary.get("chunk_count", 1))
-        compression_used = bool(summary.get("compression_used", False))
-        compressed_length = int(summary.get("compressed_length", len(digest_source)))
-
-        terms = keyword_service.explain_terms(digest_source)
-        tools_called.append("term_explain")
-
-        quiz = quiz_service.generate_quiz(digest_source)
-        tools_called.append("quiz")
-
-        mindmap = mindmap_service.generate_mindmap(digest_source)
-        tools_called.append("mindmap")
-
-        response = DigestResponse(
-            trace_id=trace_id,
-            one_sentence=summary["one_sentence"],
-            key_points=summary["key_points"],
-            terms=terms,
-            quiz=quiz,
-            mindmap=mindmap,
-        )
-        output_path = str(save_output(trace_id, response))
-
-        # 记录本次执行链路，后续可以继续扩展节点耗时和中间结果。
-        trace = TraceInfo(
-            trace_id=trace_id,
-            input_type="text",
-            tools_called=tools_called,
-            latency_ms=int((perf_counter() - started_at) * 1000),
-            input_length=input_length,
-            chunk_count=chunk_count,
-            compression_used=compression_used,
-            compressed_length=compressed_length,
-            error=None,
-            output_path=output_path,
-        )
-        save_trace(trace)
-        return response
+        return run_text_digest_workflow(request.text)
     except Exception as exc:
-        trace = TraceInfo(
-            trace_id=trace_id,
-            input_type="text",
-            tools_called=tools_called,
-            latency_ms=int((perf_counter() - started_at) * 1000),
-            input_length=input_length,
-            chunk_count=chunk_count,
-            compression_used=compression_used,
-            compressed_length=compressed_length,
-            error=str(exc),
-            output_path=output_path,
-        )
-        save_trace(trace)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/video-url", response_model=VideoDigestResponse)
+async def digest_video_url(request: VideoDigestRequest) -> VideoDigestResponse:
+    started_at = perf_counter()
+    transcript_result = transcript_service.get_transcript_from_video_url(request.url)
+    transcript = str(transcript_result.get("transcript") or "")
+    transcript_source = str(transcript_result.get("transcript_source") or "none")
+    fallback_needed = bool(transcript_result.get("fallback_needed", True))
+    fallback_used = bool(transcript_result.get("fallback_used", False))
+
+    if transcript and not fallback_needed:
+        digest = run_text_digest_workflow(transcript)
+        trace_data = load_trace(digest.trace_id) or {
+            "trace_id": digest.trace_id,
+            "tools_called": [],
+        }
+        text_tools = list(trace_data.get("tools_called", []))
+        prefix_tools = ["extract_subtitle"]
+        if fallback_used:
+            prefix_tools.append("whisper_fallback")
+
+        trace_data.update(
+            {
+                "trace_id": digest.trace_id,
+                "input_type": "video_url",
+                "route": "subtitle_first_whisper_fallback",
+                "video_url": request.url,
+                "transcript_source": transcript_source,
+                "fallback_needed": False,
+                "fallback_used": fallback_used,
+                "audio_downloaded": bool(transcript_result.get("audio_downloaded", False)),
+                "whisper_model_size": transcript_result.get("whisper_model_size"),
+                "transcript_length": len(transcript),
+                "tools_called": [*prefix_tools, *text_tools],
+                "latency_ms": int((perf_counter() - started_at) * 1000),
+                "error": transcript_result.get("error"),
+            }
+        )
+        save_trace_data(digest.trace_id, trace_data)
+
+        return VideoDigestResponse(
+            trace_id=digest.trace_id,
+            input_type="video_url",
+            transcript_source=transcript_source,
+            fallback_needed=False,
+            fallback_used=fallback_used,
+            one_sentence=digest.one_sentence,
+            key_points=digest.key_points,
+            terms=digest.terms,
+            quiz=digest.quiz,
+            mindmap=digest.mindmap,
+            error=transcript_result.get("error"),
+        )
+
+    trace_id = create_trace_id()
+    error = str(transcript_result.get("error") or "Transcript extraction failed.")
+    tools_called = ["extract_subtitle"]
+    if transcript_result.get("whisper_model_size") or transcript_result.get("audio_downloaded"):
+        tools_called.append("whisper_fallback")
+
+    trace = TraceInfo(
+        trace_id=trace_id,
+        input_type="video_url",
+        tools_called=tools_called,
+        latency_ms=int((perf_counter() - started_at) * 1000),
+        route="subtitle_first_whisper_fallback",
+        video_url=request.url,
+        transcript_source="none",
+        fallback_needed=True,
+        fallback_used=False,
+        audio_downloaded=bool(transcript_result.get("audio_downloaded", False)),
+        whisper_model_size=transcript_result.get("whisper_model_size"),
+        transcript_length=0,
+        error=error,
+        output_path=None,
+    )
+    save_trace(trace)
+
+    # 字幕和 Whisper 都失败时返回错误，但接口保持 200，方便前端展示 fallback 状态。
+    return VideoDigestResponse(
+        trace_id=trace_id,
+        input_type="video_url",
+        transcript_source="none",
+        fallback_needed=True,
+        fallback_used=False,
+        error=error,
+    )

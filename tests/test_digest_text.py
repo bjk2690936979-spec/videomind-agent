@@ -82,7 +82,15 @@ def test_digest_text_creates_output_and_trace(tmp_path, monkeypatch) -> None:
     trace = trace_response.json()
     assert trace["trace_id"] == trace_id
     assert trace["input_type"] == "text"
-    assert trace["tools_called"] == ["summary", "term_explain", "quiz", "mindmap"]
+    assert trace["tools_called"] == [
+        "route",
+        "split",
+        "summary",
+        "term_explain",
+        "quiz",
+        "mindmap",
+        "trace",
+    ]
     assert trace["input_length"] == len("FastAPI 学习材料")
     assert trace["chunk_count"] == 1
     assert trace["compression_used"] is False
@@ -157,6 +165,15 @@ def test_digest_text_uses_compression_for_long_input(tmp_path, monkeypatch) -> N
     assert data["one_sentence"] == "长文本已经先压缩再总结。"
 
     trace = client.get(f"/trace/{data['trace_id']}").json()
+    assert trace["tools_called"] == [
+        "route",
+        "split",
+        "summary",
+        "term_explain",
+        "quiz",
+        "mindmap",
+        "trace",
+    ]
     assert trace["input_length"] == len(long_text)
     assert trace["compression_used"] is True
     assert trace["chunk_count"] > 1
