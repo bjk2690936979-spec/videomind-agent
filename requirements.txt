@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-dotenv
+pydantic
+openai
+langgraph
+langchain-core
+yt-dlp
+faster-whisper
+streamlit
+requests
+pytest
+httpx
