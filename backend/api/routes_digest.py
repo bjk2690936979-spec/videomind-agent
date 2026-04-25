@@ -36,11 +36,13 @@ async def digest_video_url(request: VideoDigestRequest) -> VideoDigestResponse:
 
     if transcript and not fallback_needed:
         digest = run_text_digest_workflow(transcript)
+        # 文本 workflow 已保存 trace，这里补上视频来源和字幕/Whisper 元信息。
         trace_data = load_trace(digest.trace_id) or {
             "trace_id": digest.trace_id,
             "tools_called": [],
         }
         text_tools = list(trace_data.get("tools_called", []))
+        # tools_called 保留真实执行顺序：先视频转文本，再进入文本消化链路。
         prefix_tools = ["extract_subtitle"]
         if fallback_used:
             prefix_tools.append("whisper_fallback")
@@ -80,6 +82,7 @@ async def digest_video_url(request: VideoDigestRequest) -> VideoDigestResponse:
 
     trace_id = create_trace_id()
     error = str(transcript_result.get("error") or "Transcript extraction failed.")
+    # 未进入文本 workflow 时也生成独立 trace，方便前端查询失败细节。
     tools_called = ["extract_subtitle"]
     if transcript_result.get("whisper_model_size") or transcript_result.get("audio_downloaded"):
         tools_called.append("whisper_fallback")

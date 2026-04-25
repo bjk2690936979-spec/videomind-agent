@@ -16,6 +16,7 @@ def _storage_path(*parts: str) -> Path:
 
 
 def _model_to_dict(model: Any) -> Dict[str, Any]:
+    # 兼容 Pydantic v2 的 model_dump 和 v1 的 dict。
     if hasattr(model, "model_dump"):
         return model.model_dump()
     return model.dict()

@@ -44,6 +44,7 @@ def format_compressed_context(compressed_context: Dict[str, Any]) -> str:
 def summarize_text(text: str) -> Dict[str, Any]:
     input_length = len(text)
 
+    # 短文本直接总结，长文本先压缩再总结，避免超出模型上下文。
     if input_length <= LONG_TEXT_THRESHOLD:
         summary = summarize_digest_source(text)
         summary.update(

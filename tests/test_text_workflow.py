@@ -6,6 +6,7 @@ from backend.services import keyword_service, mindmap_service, quiz_service, sum
 
 
 def test_run_text_digest_workflow_returns_digest_response(tmp_path, monkeypatch) -> None:
+    # 固定各节点的 LLM 响应，专注验证 LangGraph 串联和 trace 输出。
     monkeypatch.setattr(
         trace_service,
         "get_settings",

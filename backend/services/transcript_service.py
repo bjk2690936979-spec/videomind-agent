@@ -5,6 +5,7 @@ from backend.tools.whisper_tool import fallback_to_whisper
 
 
 def get_transcript_from_video_url(video_url: str) -> Dict[str, Any]:
+    # 视频链路优先复用平台字幕，只有字幕不可用时才走 Whisper 成本更高的 fallback。
     try:
         subtitle_result = extract_subtitle(video_url)
     except Exception as exc:
@@ -34,6 +35,7 @@ def get_transcript_from_video_url(video_url: str) -> Dict[str, Any]:
             "error": subtitle_result.get("error"),
         }
 
+    # 字幕缺失或为空时再下载音频并转写。
     try:
         whisper_result = fallback_to_whisper(video_url)
     except Exception as exc:

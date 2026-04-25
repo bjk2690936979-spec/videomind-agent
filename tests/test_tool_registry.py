@@ -28,6 +28,7 @@ def test_get_unknown_tool_has_clear_error() -> None:
 
 
 def test_tool_metadata_contains_required_fields() -> None:
+    # registry 对外暴露的是工具合同，字段缺失会影响 Agent 调度。
     for tool in default_registry.list_tools():
         assert tool.name
         assert tool.description

@@ -19,6 +19,7 @@ def _normalize_compressed_context(result: Any, chunk_count: int) -> Dict[str, An
     if not isinstance(result, dict):
         result = {}
 
+    # LLM 输出可能缺字段或类型不稳定，这里收敛成后续节点固定读取的结构。
     return {
         "global_summary": str(result.get("global_summary", "")).strip(),
         "key_points": _as_string_list(result.get("key_points")),
@@ -42,6 +43,7 @@ def compress_text(text: str, chunk_size: int = 2500, overlap: int = 200) -> Dict
     chunks = split_text(text, chunk_size=chunk_size, overlap=overlap)
     skill = load_skill("context_compress")
 
+    # 先逐段压缩，再合并全局上下文，避免一次性输入超出模型上下文。
     chunk_contexts = [
         _summarize_chunk(skill, chunk, index + 1, len(chunks))
         for index, chunk in enumerate(chunks)
@@ -60,6 +62,7 @@ def compress_text(text: str, chunk_size: int = 2500, overlap: int = 200) -> Dict
     final_result = generate_json(final_prompt)
     compressed_context = _normalize_compressed_context(final_result, len(chunks))
 
+    # 合并阶段输出为空时，用确定性合并结果兜底，保证摘要链路不断。
     if not compressed_context["global_summary"]:
         compressed_context["global_summary"] = str(merged_context["global_summary"])
     if not compressed_context["key_points"]:

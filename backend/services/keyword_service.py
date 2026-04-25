@@ -10,6 +10,7 @@ def explain_terms(text: str) -> List[TermItem]:
     prompt = f"{skill}\n\n学习材料：\n{text}"
 
     result = generate_json(prompt)
+    # 兼容模型直接返回数组，或包一层 {"terms": [...]} 的情况。
     items = result.get("terms", result) if isinstance(result, dict) else result
     if not isinstance(items, list):
         return []

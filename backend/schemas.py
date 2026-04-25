@@ -8,6 +8,7 @@ class HealthResponse(BaseModel):
     service: str
 
 
+# 输入模型只做轻量校验，业务校验放在 workflow/service 层。
 class TextDigestRequest(BaseModel):
     text: str = Field(..., min_length=1, description="需要消化的学习材料")
 
@@ -28,6 +29,7 @@ class QuizItem(BaseModel):
     answer: str
 
 
+# Trace 同时承载文本和视频链路元信息，缺省值保证失败路径也能落盘。
 class TraceInfo(BaseModel):
     trace_id: str
     input_type: str
@@ -58,6 +60,7 @@ class DigestResponse(BaseModel):
     mindmap: str
 
 
+# 视频接口在转写失败时仍返回 200，所以学习内容字段需要可为空。
 class VideoDigestResponse(BaseModel):
     trace_id: str
     input_type: str

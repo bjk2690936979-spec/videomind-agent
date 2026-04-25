@@ -6,8 +6,11 @@ from typing import Any, Dict, Iterable, Optional
 import requests
 import yt_dlp
 
+from backend.tools.ytdlp_options import build_ytdlp_options
+
 
 SUBTITLE_EXT_PRIORITY = ("vtt", "srt", "json3")
+# 先选中文，再选英文；没有命中时仍会遍历平台返回的其它语言。
 LANGUAGE_PRIORITY = (
     "zh-Hans",
     "zh-CN",
@@ -46,6 +49,7 @@ def _iter_language_keys(captions: Dict[str, Any]) -> Iterable[str]:
 
 
 def _select_caption(captions: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    # 同一种语言下优先选更容易解析的字幕格式。
     for language in _iter_language_keys(captions):
         formats = captions.get(language) or []
         for ext in SUBTITLE_EXT_PRIORITY:
@@ -65,6 +69,7 @@ def _parse_json3(content: str) -> str:
     payload = json.loads(content)
     lines = []
     for event in payload.get("events", []):
+        # json3 的一句字幕可能拆在多个 segs 里，需要先拼回完整行。
         segments = event.get("segs") or []
         line = "".join(segment.get("utf8", "") for segment in segments)
         line = _strip_caption_tags(line)
@@ -114,11 +119,13 @@ def extract_subtitle(video_url: str) -> Dict[str, Any]:
     if not video_url or not video_url.strip():
         return _result(False, error="video_url must not be empty.")
 
-    options = {
-        "skip_download": True,
-        "quiet": True,
-        "no_warnings": True,
-    }
+    options = build_ytdlp_options(
+        {
+            "skip_download": True,
+            "quiet": True,
+            "no_warnings": True,
+        }
+    )
 
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
@@ -126,6 +133,7 @@ def extract_subtitle(video_url: str) -> Dict[str, Any]:
     except Exception as exc:
         return _result(False, error=f"yt-dlp failed: {exc}")
 
+    # 优先人工字幕，其次自动字幕，成功后就无需 Whisper fallback。
     subtitles = info.get("subtitles") or {}
     automatic_captions = info.get("automatic_captions") or {}
     caption = _select_caption(subtitles) or _select_caption(automatic_captions)

@@ -12,6 +12,7 @@ def get_llm_client() -> OpenAI:
     if not settings.llm_api_key:
         raise MissingConfigurationError("LLM_API_KEY is required to create an LLM client.")
 
+    # base_url 可接入 OpenAI 兼容网关；未配置时走 SDK 默认地址。
     client_kwargs = {"api_key": settings.llm_api_key}
     if settings.llm_base_url:
         client_kwargs["base_url"] = settings.llm_base_url
@@ -40,6 +41,7 @@ def _extract_json_content(content: str) -> str:
     except json.JSONDecodeError:
         pass
 
+    # 允许模型在 JSON 前后夹带少量说明，只截取最外层对象/数组。
     object_start = content.find("{")
     array_start = content.find("[")
     starts = [index for index in (object_start, array_start) if index != -1]

@@ -15,6 +15,7 @@ from backend.services import (
 
 
 def test_digest_text_creates_output_and_trace(tmp_path, monkeypatch) -> None:
+    # 用固定 LLM 输出隔离外部模型依赖，只验证 API、workflow 和 trace 落盘。
     monkeypatch.setattr(
         trace_service,
         "get_settings",
@@ -100,6 +101,7 @@ def test_digest_text_creates_output_and_trace(tmp_path, monkeypatch) -> None:
 
 
 def test_digest_text_uses_compression_for_long_input(tmp_path, monkeypatch) -> None:
+    # 长文本用例验证 split/compress 标记会写入 trace。
     monkeypatch.setattr(
         trace_service,
         "get_settings",

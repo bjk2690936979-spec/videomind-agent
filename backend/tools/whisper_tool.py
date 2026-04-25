@@ -5,6 +5,7 @@ from uuid import uuid4
 import yt_dlp
 
 from backend.config import get_settings
+from backend.tools.ytdlp_options import build_ytdlp_options
 
 try:
     from faster_whisper import WhisperModel
@@ -28,13 +29,22 @@ def download_audio(video_url: str) -> Dict[str, Any]:
     file_stem = uuid4().hex
     output_template = str(audio_dir / f"{file_stem}.%(ext)s")
 
-    options = {
-        "format": "bestaudio/best",
-        "outtmpl": output_template,
-        "quiet": True,
-        "no_warnings": True,
-        "noplaylist": True,
-    }
+    options = build_ytdlp_options(
+        {
+            "format": "bestaudio/best",
+            "outtmpl": output_template,
+            "quiet": True,
+            "no_warnings": True,
+            "noplaylist": True,
+        }
+    )
+    cookiefile = options.get("cookiefile")
+    if cookiefile and not Path(str(cookiefile)).exists():
+        return _result(
+            False,
+            audio_path="",
+            error=f"Configured YTDLP_COOKIES_FILE does not exist: {cookiefile}",
+        )
 
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
@@ -51,6 +61,7 @@ def download_audio(video_url: str) -> Dict[str, Any]:
 
 
 def _find_downloaded_audio_path(audio_dir: Path, file_stem: str, info: Dict[str, Any]) -> Optional[Path]:
+    # yt-dlp 不同版本返回的下载路径字段不同，这里按可信度依次查找。
     for item in info.get("requested_downloads") or []:
         filepath = item.get("filepath")
         if filepath and Path(filepath).exists():
@@ -121,6 +132,7 @@ def transcribe_audio(audio_path: str) -> Dict[str, Any]:
 def fallback_to_whisper(video_url: str) -> Dict[str, Any]:
     download_result = download_audio(video_url)
     if not download_result.get("success"):
+        # 下载失败仍标记 fallback_used，表示确实尝试过 Whisper 路径。
         return {
             "transcript": "",
             "source": "whisper",

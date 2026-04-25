@@ -2,6 +2,7 @@ from backend.tools import subtitle_tool
 
 
 class FakeResponse:
+    # 只实现字幕下载流程需要的 requests.Response 行为。
     def __init__(self, text: str) -> None:
         self.text = text
 
@@ -10,6 +11,9 @@ class FakeResponse:
 
 
 class FakeYDL:
+    # 模拟 yt-dlp 元信息提取，避免测试访问真实视频平台。
+    last_options = None
+
     def __init__(self, info=None, error=None) -> None:
         self.info = info or {}
         self.error = error
@@ -27,6 +31,7 @@ class FakeYDL:
 
 
 def test_extract_subtitle_from_mocked_vtt(monkeypatch) -> None:
+    # VTT 中的时间轴和标签应被剥离，只留下可消化文本。
     info = {
         "subtitles": {
             "en": [
@@ -37,7 +42,16 @@ def test_extract_subtitle_from_mocked_vtt(monkeypatch) -> None:
             ]
         }
     }
-    monkeypatch.setattr(subtitle_tool.yt_dlp, "YoutubeDL", lambda options: FakeYDL(info=info))
+    def fake_ytdl(options):
+        FakeYDL.last_options = options
+        return FakeYDL(info=info)
+
+    monkeypatch.setattr(subtitle_tool.yt_dlp, "YoutubeDL", fake_ytdl)
+    monkeypatch.setattr(
+        subtitle_tool,
+        "build_ytdlp_options",
+        lambda options: {**options, "cookiefile": "backend/storage/cookies/youtube.txt"},
+    )
     monkeypatch.setattr(
         subtitle_tool.requests,
         "get",
@@ -53,6 +67,7 @@ def test_extract_subtitle_from_mocked_vtt(monkeypatch) -> None:
     assert result["source"] == "subtitle"
     assert result["transcript"] == "Hello world"
     assert result["error"] is None
+    assert FakeYDL.last_options["cookiefile"] == "backend/storage/cookies/youtube.txt"
 
 
 def test_extract_subtitle_returns_fallback_when_no_subtitle(monkeypatch) -> None:

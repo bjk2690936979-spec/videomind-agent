@@ -17,12 +17,13 @@ backend/storage/compressed/*
 backend/storage/outputs/*
 backend/storage/traces/*
 backend/storage/audio/*
+backend/storage/cookies/*
 !backend/storage/transcripts/.gitkeep
 !backend/storage/compressed/.gitkeep
 !backend/storage/outputs/.gitkeep
 !backend/storage/traces/.gitkeep
 !backend/storage/audio/.gitkeep
-
+!backend/storage/cookies/.gitkeep
 *.log
 .DS_Store
 Thumbs.db

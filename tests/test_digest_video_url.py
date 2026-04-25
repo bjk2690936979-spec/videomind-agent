@@ -10,6 +10,7 @@ from backend.services import trace_service, transcript_service
 
 
 def _fake_digest_response(trace_id: str = "a" * 32) -> DigestResponse:
+    # 视频接口只关心文本 workflow 的合同，这里构造稳定响应。
     return DigestResponse(
         trace_id=trace_id,
         one_sentence="视频内容已经进入文本消化流程。",
@@ -33,6 +34,7 @@ def _fake_digest_response(trace_id: str = "a" * 32) -> DigestResponse:
 
 
 def test_transcript_service_skips_whisper_when_subtitle_exists(monkeypatch) -> None:
+    # subtitle-first 命中时，Whisper 不应被调用。
     monkeypatch.setattr(
         transcript_service,
         "extract_subtitle",
@@ -150,6 +152,7 @@ def test_digest_video_url_without_subtitle_uses_whisper(tmp_path, monkeypatch) -
 
 
 def test_digest_video_url_whisper_failure_does_not_crash(tmp_path, monkeypatch) -> None:
+    # 转写失败是可展示状态，接口保持 200 并写入 trace。
     monkeypatch.setattr(
         trace_service,
         "get_settings",

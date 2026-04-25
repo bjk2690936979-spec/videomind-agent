@@ -18,6 +18,7 @@ from backend.services.trace_service import create_trace_id, save_trace
 def build_text_digest_graph() -> Any:
     workflow = StateGraph(AgentState)
 
+    # 当前文本链路是线性 DAG，后续扩展视频/多模态时可在 route 后分支。
     workflow.add_node("route", route_node)
     workflow.add_node("split", split_node)
     workflow.add_node("summary", summary_node)
@@ -41,6 +42,7 @@ def build_text_digest_graph() -> Any:
 def run_text_digest_workflow(text: str) -> DigestResponse:
     trace_id = create_trace_id()
     started_at = perf_counter()
+    # 初始化所有下游节点会读取的字段，减少节点内的缺省判断。
     initial_state: AgentState = {
         "trace_id": trace_id,
         "input_type": "text",
@@ -86,6 +88,7 @@ def run_text_digest_workflow(text: str) -> DigestResponse:
         save_trace(trace)
         raise
 
+    # trace_node 通常会放入完整 response；兜底构造保持旧调用方可用。
     response = final_state.get("response")
     if isinstance(response, DigestResponse):
         return response

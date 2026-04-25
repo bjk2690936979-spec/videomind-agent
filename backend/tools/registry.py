@@ -7,6 +7,7 @@ from backend.tools import context_compressor, subtitle_tool, text_splitter, whis
 
 @dataclass
 class ToolDefinition:
+    # 工具元数据供 Agent 调度、测试和前端展示复用。
     name: str
     description: str
     input_schema: Dict[str, Any]
@@ -68,6 +69,7 @@ def _wrap_generate_mindmap(text: str) -> Dict[str, Any]:
 
 def create_default_registry() -> ToolRegistry:
     registry = ToolRegistry()
+    # 默认 registry 汇总所有内置工具；handler 只做薄封装，不吞异常。
     registry.register(
         ToolDefinition(
             name="extract_subtitle",

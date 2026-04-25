@@ -5,6 +5,9 @@ from backend.tools import whisper_tool
 
 
 class FakeYDL:
+    # 模拟 yt-dlp 的 context manager，并在 tmp_path 下写出音频文件。
+    last_options = None
+
     def __init__(self, audio_dir: Path, error=None) -> None:
         self.audio_dir = audio_dir
         self.error = error
@@ -29,6 +32,7 @@ class FakeSegment:
 
 
 class FakeWhisperModel:
+    # 模拟 faster-whisper 返回分段文本，避免测试依赖本地模型。
     def __init__(self, model_size, device="cpu", compute_type="int8") -> None:
         self.model_size = model_size
         self.device = device
@@ -53,11 +57,18 @@ def _settings(tmp_path):
 
 
 def test_download_audio_success(tmp_path, monkeypatch) -> None:
+    cookies_file = tmp_path / "cookies.txt"
+    cookies_file.write_text("", encoding="utf-8")
     monkeypatch.setattr(whisper_tool, "get_settings", lambda: _settings(tmp_path))
     monkeypatch.setattr(
         whisper_tool.yt_dlp,
         "YoutubeDL",
-        lambda options: FakeYDL(tmp_path),
+        lambda options: setattr(FakeYDL, "last_options", options) or FakeYDL(tmp_path),
+    )
+    monkeypatch.setattr(
+        whisper_tool,
+        "build_ytdlp_options",
+        lambda options: {**options, "cookiefile": str(cookies_file)},
     )
 
     result = whisper_tool.download_audio("https://youtu.be/demo")
@@ -65,10 +76,12 @@ def test_download_audio_success(tmp_path, monkeypatch) -> None:
     assert result["success"] is True
     assert result["error"] is None
     assert Path(result["audio_path"]).exists()
+    assert FakeYDL.last_options["cookiefile"] == str(cookies_file)
 
 
 def test_download_audio_failure(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(whisper_tool, "get_settings", lambda: _settings(tmp_path))
+    monkeypatch.setattr(whisper_tool, "build_ytdlp_options", lambda options: options)
     monkeypatch.setattr(
         whisper_tool.yt_dlp,
         "YoutubeDL",
@@ -79,6 +92,28 @@ def test_download_audio_failure(tmp_path, monkeypatch) -> None:
 
     assert result["success"] is False
     assert "Audio download failed" in result["error"]
+
+
+def test_download_audio_missing_cookiefile_returns_clear_error(tmp_path, monkeypatch) -> None:
+    # cookiefile 配置错误时应提前失败，不调用 yt-dlp。
+    missing_cookiefile = tmp_path / "missing-cookies.txt"
+    monkeypatch.setattr(whisper_tool, "get_settings", lambda: _settings(tmp_path))
+    monkeypatch.setattr(
+        whisper_tool,
+        "build_ytdlp_options",
+        lambda options: {**options, "cookiefile": str(missing_cookiefile)},
+    )
+    monkeypatch.setattr(
+        whisper_tool.yt_dlp,
+        "YoutubeDL",
+        lambda options: (_ for _ in ()).throw(AssertionError("yt-dlp should not be called")),
+    )
+
+    result = whisper_tool.download_audio("https://youtu.be/demo")
+
+    assert result["success"] is False
+    assert result["audio_path"] == ""
+    assert result["error"] == f"Configured YTDLP_COOKIES_FILE does not exist: {missing_cookiefile}"
 
 
 def test_transcribe_audio_success(tmp_path, monkeypatch) -> None:
