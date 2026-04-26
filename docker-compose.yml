@@ -1,0 +1,22 @@
+services:
+  videomind-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      STORAGE_DIR: /app/backend/storage
+      AUDIO_STORAGE_DIR: /app/backend/storage/audio
+      WHISPER_MODEL_SIZE: ${WHISPER_MODEL_SIZE:-base}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+      YTDLP_COOKIES_FILE: ${YTDLP_COOKIES_FILE:-}
+      YTDLP_COOKIES_FROM_BROWSER: ${YTDLP_COOKIES_FROM_BROWSER:-}
+      YTDLP_PROXY: ${YTDLP_PROXY:-}
+      YTDLP_USER_AGENT: ${YTDLP_USER_AGENT:-}
+    volumes:
+      - ./backend/storage:/app/backend/storage
