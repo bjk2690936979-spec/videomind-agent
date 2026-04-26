@@ -1,10 +1,17 @@
 import json
-from typing import Any
+from contextvars import ContextVar
+from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
 
 from backend.config import get_settings
 from backend.core.exceptions import LLMJSONParseError, MissingConfigurationError
+
+
+_token_usage: ContextVar[Optional[List[Dict[str, Any]]]] = ContextVar(
+    "token_usage",
+    default=None,
+)
 
 
 def get_llm_client() -> OpenAI:
@@ -64,6 +71,66 @@ def parse_json_response(content: str) -> Any:
         raise LLMJSONParseError(f"Failed to parse LLM JSON response: {exc}") from exc
 
 
+def begin_token_usage_tracking():
+    return _token_usage.set([])
+
+
+def finish_token_usage_tracking(token) -> List[Dict[str, Any]]:
+    usage = current_token_usage()
+    _token_usage.reset(token)
+    return usage
+
+
+def current_token_usage() -> List[Dict[str, Any]]:
+    usage = _token_usage.get()
+    if usage is None:
+        return []
+    return [dict(item) for item in usage]
+
+
+def summarize_token_usage(usage: List[Dict[str, Any]]) -> Dict[str, int]:
+    return {
+        "prompt_tokens": sum(int(item.get("prompt_tokens") or 0) for item in usage),
+        "completion_tokens": sum(int(item.get("completion_tokens") or 0) for item in usage),
+        "total_tokens": sum(int(item.get("total_tokens") or 0) for item in usage),
+    }
+
+
+def _as_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _usage_value(usage: Any, key: str) -> Any:
+    if isinstance(usage, dict):
+        return usage.get(key)
+    return getattr(usage, key, 0)
+
+
+def _record_token_usage(response: Any, model: str) -> None:
+    usage = getattr(response, "usage", None)
+    usage_bucket = _token_usage.get()
+    if usage is None or usage_bucket is None:
+        return
+
+    prompt_tokens = _as_int(_usage_value(usage, "prompt_tokens"))
+    completion_tokens = _as_int(_usage_value(usage, "completion_tokens"))
+    total_tokens = _as_int(_usage_value(usage, "total_tokens"))
+    if not total_tokens:
+        total_tokens = prompt_tokens + completion_tokens
+
+    usage_bucket.append(
+        {
+            "model": str(getattr(response, "model", model) or model),
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+        }
+    )
+
+
 def generate_json(prompt: str) -> Any:
     settings = get_settings()
     if not settings.llm_model:
@@ -81,6 +148,7 @@ def generate_json(prompt: str) -> Any:
         ],
         temperature=0.2,
     )
+    _record_token_usage(response, settings.llm_model)
 
     content = response.choices[0].message.content
     if not content:

@@ -28,6 +28,10 @@ class AgentState(TypedDict, total=False):
     latency_ms: int
     started_at: float
     response: Any
+    usage: List[Dict[str, Any]]
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
 
 
 def append_tool(state: AgentState, tool_name: str) -> List[str]:

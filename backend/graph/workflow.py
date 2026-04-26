@@ -3,6 +3,11 @@ from typing import Any
 
 from langgraph.graph import END, StateGraph
 
+from backend.core.llm import (
+    begin_token_usage_tracking,
+    finish_token_usage_tracking,
+    summarize_token_usage,
+)
 from backend.graph.nodes.keyword_node import keyword_node
 from backend.graph.nodes.mindmap_node import mindmap_node
 from backend.graph.nodes.quiz_node import quiz_node
@@ -66,12 +71,19 @@ def run_text_digest_workflow(text: str) -> DigestResponse:
         "compressed_length": len(text),
         "latency_ms": 0,
         "started_at": started_at,
+        "usage": [],
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
     }
 
     graph = build_text_digest_graph()
+    usage_token = begin_token_usage_tracking()
     try:
         final_state = graph.invoke(initial_state)
     except Exception as exc:
+        usage = finish_token_usage_tracking(usage_token)
+        token_totals = summarize_token_usage(usage)
         # 工作流失败时也记录 trace，方便后续排查。
         trace = TraceInfo(
             trace_id=trace_id,
@@ -84,9 +96,12 @@ def run_text_digest_workflow(text: str) -> DigestResponse:
             compressed_length=len(text),
             error=str(exc),
             output_path=None,
+            usage=usage,
+            **token_totals,
         )
         save_trace(trace)
         raise
+    finish_token_usage_tracking(usage_token)
 
     # trace_node 通常会放入完整 response；兜底构造保持旧调用方可用。
     response = final_state.get("response")
@@ -100,4 +115,9 @@ def run_text_digest_workflow(text: str) -> DigestResponse:
         terms=list(final_state.get("terms", [])),
         quiz=list(final_state.get("quiz", [])),
         mindmap=str(final_state.get("mindmap") or ""),
+        latency_ms=int(final_state.get("latency_ms", 0)),
+        usage=list(final_state.get("usage", [])),
+        prompt_tokens=int(final_state.get("prompt_tokens", 0)),
+        completion_tokens=int(final_state.get("completion_tokens", 0)),
+        total_tokens=int(final_state.get("total_tokens", 0)),
     )

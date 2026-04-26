@@ -29,6 +29,13 @@ class QuizItem(BaseModel):
     answer: str
 
 
+class TokenUsageItem(BaseModel):
+    model: Optional[str] = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
 # Trace 同时承载文本和视频链路元信息，缺省值保证失败路径也能落盘。
 class TraceInfo(BaseModel):
     trace_id: str
@@ -49,6 +56,10 @@ class TraceInfo(BaseModel):
     transcript_length: int = 0
     error: Optional[str] = None
     output_path: Optional[str] = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    usage: List[TokenUsageItem] = Field(default_factory=list)
 
 
 class DigestResponse(BaseModel):
@@ -58,6 +69,11 @@ class DigestResponse(BaseModel):
     terms: List[TermItem]
     quiz: List[QuizItem]
     mindmap: str
+    latency_ms: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    usage: List[TokenUsageItem] = Field(default_factory=list)
 
 
 # 视频接口在转写失败时仍返回 200，所以学习内容字段需要可为空。
@@ -73,3 +89,8 @@ class VideoDigestResponse(BaseModel):
     quiz: List[QuizItem] = Field(default_factory=list)
     mindmap: str = ""
     error: Optional[str] = None
+    latency_ms: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    usage: List[TokenUsageItem] = Field(default_factory=list)

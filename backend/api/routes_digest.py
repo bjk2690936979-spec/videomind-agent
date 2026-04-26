@@ -36,6 +36,7 @@ async def digest_video_url(request: VideoDigestRequest) -> VideoDigestResponse:
 
     if transcript and not fallback_needed:
         digest = run_text_digest_workflow(transcript)
+        latency_ms = int((perf_counter() - started_at) * 1000)
         # 文本 workflow 已保存 trace，这里补上视频来源和字幕/Whisper 元信息。
         trace_data = load_trace(digest.trace_id) or {
             "trace_id": digest.trace_id,
@@ -60,8 +61,19 @@ async def digest_video_url(request: VideoDigestRequest) -> VideoDigestResponse:
                 "whisper_model_size": transcript_result.get("whisper_model_size"),
                 "transcript_length": len(transcript),
                 "tools_called": [*prefix_tools, *text_tools],
-                "latency_ms": int((perf_counter() - started_at) * 1000),
+                "latency_ms": latency_ms,
                 "error": transcript_result.get("error"),
+                "prompt_tokens": digest.prompt_tokens,
+                "completion_tokens": digest.completion_tokens,
+                "total_tokens": digest.total_tokens,
+                "usage": [
+                    item.model_dump()
+                    if hasattr(item, "model_dump")
+                    else item.dict()
+                    if hasattr(item, "dict")
+                    else dict(item)
+                    for item in digest.usage
+                ],
             }
         )
         save_trace_data(digest.trace_id, trace_data)
@@ -78,6 +90,11 @@ async def digest_video_url(request: VideoDigestRequest) -> VideoDigestResponse:
             quiz=digest.quiz,
             mindmap=digest.mindmap,
             error=transcript_result.get("error"),
+            latency_ms=latency_ms,
+            prompt_tokens=digest.prompt_tokens,
+            completion_tokens=digest.completion_tokens,
+            total_tokens=digest.total_tokens,
+            usage=digest.usage,
         )
 
     trace_id = create_trace_id()
@@ -113,4 +130,5 @@ async def digest_video_url(request: VideoDigestRequest) -> VideoDigestResponse:
         fallback_needed=True,
         fallback_used=False,
         error=error,
+        latency_ms=trace.latency_ms,
     )
